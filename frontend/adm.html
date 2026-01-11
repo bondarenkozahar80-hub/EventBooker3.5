@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <title>Управление событиями</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f4f6f8;
+        }
+        h1, h2 {
+            text-align: center;
+        }
+        form {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .card {
+            background: #fff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .registration-card {
+            background: #f9f9f9;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 6px;
+            font-size: 13px;
+            border-left: 3px solid #007bff;
+        }
+        .registrations {
+            margin-top: 10px;
+            padding-left: 10px;
+        }
+        .toggle-btn {
+            cursor: pointer;
+            color: #007bff;
+            font-weight: bold;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+<h1>Управление событиями</h1>
+
+<form id="eventForm">
+    <input type="text" id="name" placeholder="Название события" required />
+    <textarea id="description" placeholder="Описание"></textarea>
+    <input type="datetime-local" id="start_time" required />
+    <input type="datetime-local" id="end_time" />
+    <input type="text" id="location" placeholder="Место проведения" />
+    <input type="number" id="capacity" placeholder="Вместимость" required min="1" />
+    <input type="number" id="timeout" placeholder="Таймаут оплаты (минуты)" required min="1" />
+    <button type="submit">Создать событие</button>
+</form>
+
+<div class="controls">
+    <h2>Список событий</h2>
+    <button id="refreshBtn">🔄 Обновить</button>
+</div>
+
+<div id="eventsList"></div>
+<p id="errorMsg" class="error"></p>
+
+<script>
+    const API_URL = "http://localhost:8080/v1";
+
+    async function loadEvents() {
+        const eventsList = document.getElementById('eventsList');
+        const errorMsg = document.getElementById('errorMsg');
+        eventsList.innerHTML = '<p>Загрузка...</p>';
+        errorMsg.textContent = '';
+
+        try {
+            const response = await fetch(`${API_URL}/events?admin=true`);
+            const result = await response.json();
+            const events = Array.isArray(result.data) ? result.data : [];
+
+            eventsList.innerHTML = '';
+
+            if (events.length === 0) {
+                eventsList.innerHTML = '<p>Событий пока нет.</p>';
+                return;
+            }
+
+            events.forEach(ev => {
+                const card = document.createElement('div');
+                card.className = 'card';
+
+                const toggleId = `regs-${ev.id}`;
+                let registrationsHTML = '';
+                if (ev.registrations && ev.registrations.length > 0) {
+                    registrationsHTML = ev.registrations.map(r => `
+                    <div class="registration-card">
+                        <p><b>ID:</b> ${r.id}</p>
+                        <p><b>Event ID:</b> ${r.event_id}</p>
+                        <p><b>Full Name:</b> ${r.full_name}</p>
+                        <p><b>Email:</b> ${r.email}</p>
+                        <p><b>Created At:</b> ${new Date(r.created_at).toLocaleString()}</p>
+                        <p><b>Status:</b> ${r.status}</p>
+                        <p><b>Updated At:</b> ${new Date(r.updated_at).toLocaleString()}</p>
+                    </div>
+                `).join('');
+                }
+
+                card.innerHTML = `
+                <h3>${ev.name}</h3>
+                <p><b>Описание:</b> ${ev.description || '—'}</p>
+                <p><b>Место:</b> ${ev.location || '—'}</p>
+                <p><b>Начало:</b> ${new Date(ev.start_time).toLocaleString()}</p>
+                <p><b>Конец:</b> ${ev.end_time ? new Date(ev.end_time).toLocaleString() : '—'}</p>
+                <p><b>Вместимость:</b> ${ev.capacity}</p>
+                <p><b>Свободно мест:</b> ${ev.available_seats ?? '—'}</p>
+                <p class="toggle-btn" onclick="toggleRegistrations('${toggleId}')">▶ Показать регистрации (${ev.registrations?.length || 0})</p>
+                <div id="${toggleId}" class="registrations" style="display:none;">
+                    ${registrationsHTML || '<p>Нет регистраций.</p>'}
+                </div>
+            `;
+                eventsList.appendChild(card);
+            });
+        } catch (err) {
+            console.error("Ошибка при загрузке:", err);
+            errorMsg.textContent = "Ошибка при загрузке событий.";
+        }
+    }
+
+    function toggleRegistrations(id) {
+        const container = document.getElementById(id);
+        if (!container) return;
+        container.style.display = container.style.display === 'none' ? 'block' : 'none';
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', loadEvents);
+
+    document.getElementById('eventForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const name = document.getElementById('name').value;
+        const description = document.getElementById('description').value;
+        const start_time = document.getElementById('start_time').value;
+        const end_time = document.getElementById('end_time').value;
+        const location = document.getElementById('location').value;
+        const capacity = parseInt(document.getElementById('capacity').value);
+        const payment_timeout_minutes = parseInt(document.getElementById('timeout').value);
+
+        const payload = {
+            name,
+            description,
+            start_time: new Date(start_time).toISOString(),
+            end_time: end_time ? new Date(end_time).toISOString() : null,
+            location,
+            capacity,
+            payment_timeout_minutes,
+        };
+
+        try {
+            const response = await fetch(`${API_URL}/events`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                alert('Событие успешно создано!');
+                e.target.reset();
+                await loadEvents();
+            } else {
+                throw new Error(result.error?.desc || 'Ошибка при создании события');
+            }
+        } catch (err) {
+            console.error("Ошибка:", err);
+            document.getElementById('errorMsg').textContent = err.message;
+        }
+    });
+
+    loadEvents();
+</script>
+</body>
+</html>
