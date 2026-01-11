@@ -1,0 +1,34 @@
+# General application configuration
+log:
+  level: debug
+
+# REST API configuration
+server:
+  port: "8080"
+  write_timeout: 15s
+  name: WBService
+  token: "123"
+
+# PostgreSQL configuration
+database:
+  host: postgres
+  port: 5432
+  name: postgres
+  user: postgres
+  password: 17051989
+  ssl_mode: disable
+  max_conns: 10
+  max_idle_conns: 5
+  max_conn_lifetime: 300s
+
+# Redis configuration
+redis:
+  addr: "redis:6379"
+  password: ""
+  db: 0
+
+# RabbitMQ configuration
+rabbitmq:
+  url: "amqp://guest:guest@rabbitmq:5672/"
+  exchange: "notifications_exchange"
+  queue: "notifications_queue"
