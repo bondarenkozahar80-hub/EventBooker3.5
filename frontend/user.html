@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Список событий</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .event { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+        .registration, .confirmation { margin-top: 10px; padding: 10px; border: 1px dashed #999; }
+        label { display: block; margin-top: 5px; }
+        input { width: 100%; padding: 5px; margin-top: 2px; }
+        button { margin-top: 10px; padding: 5px 10px; }
+        .message { margin-top: 10px; color: green; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<h1>События</h1>
+<div id="events"></div>
+
+<template id="event-template">
+    <div class="event">
+        <h3 class="event-name"></h3>
+        <p class="event-desc"></p>
+        <p>Дата начала: <span class="event-start"></span></p>
+        <p>Дата конца: <span class="event-end"></span></p>
+        <p>Локация: <span class="event-location"></span></p>
+        <p>Свободных мест: <span class="event-seats"></span></p>
+
+        <div class="registration">
+            <h4>Зарегистрироваться</h4>
+            <form class="registration-form">
+                <label>ФИО: <input name="full_name" required></label>
+                <label>Email: <input name="email" type="email" required></label>
+                <label>Телефон: <input name="phone" required></label>
+                <button type="submit">Забронировать</button>
+            </form>
+            <div class="message"></div>
+        </div>
+
+        <div class="confirmation">
+            <h4>Подтвердить бронь</h4>
+            <form class="confirmation-form">
+                <label>ID регистрации: <input name="reg_id" type="number" required></label>
+                <label>Email: <input name="email" type="email" required></label>
+                <button type="submit">Подтвердить</button>
+            </form>
+            <div class="message-confirm"></div>
+        </div>
+    </div>
+</template>
+
+<script>
+    const apiBase = 'http://localhost:8080/v1'; // ваш API
+
+    async function loadEvents() {
+        try {
+            const res = await fetch(`${apiBase}/events`);
+            const data = await res.json();
+            if (data.status !== 'ok') throw new Error(JSON.stringify(data.error));
+
+            const container = document.getElementById('events');
+            container.innerHTML = '';
+
+            data.data.forEach(event => {
+                const tpl = document.getElementById('event-template');
+                const clone = tpl.content.cloneNode(true);
+
+                clone.querySelector('.event-name').textContent = `${event.name} (ID: ${event.id})`;
+                clone.querySelector('.event-desc').textContent = event.description;
+                clone.querySelector('.event-start').textContent = new Date(event.start_time).toLocaleString();
+                clone.querySelector('.event-end').textContent = new Date(event.end_time).toLocaleString();
+                clone.querySelector('.event-location').textContent = event.location;
+                clone.querySelector('.event-seats').textContent = event.available_seats;
+
+                // --- Регистрация ---
+                const regForm = clone.querySelector('.registration-form');
+                const regMsg = clone.querySelector('.registration .message');
+                regForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const formData = new FormData(regForm);
+                    const payload = {
+                        full_name: formData.get('full_name'),
+                        email: formData.get('email'),
+                        phone: formData.get('phone')
+                    };
+
+                    try {
+                        const res = await fetch(`${apiBase}/events/${event.id}/book`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        const result = await res.json();
+
+                        if (result.status === 'ok') {
+                            regMsg.textContent = `Регистрация успешна! Ваш ID: ${result.data.id}`;
+                            regMsg.style.color = 'green';
+                            regForm.reset();
+                        } else {
+                            regMsg.textContent = `Ошибка: ${result.error.desc}`;
+                            regMsg.style.color = 'red';
+                        }
+                    } catch (err) {
+                        regMsg.textContent = `Ошибка запроса: ${err.message}`;
+                        regMsg.style.color = 'red';
+                    }
+                });
+
+                // --- Подтверждение ---
+                const confirmForm = clone.querySelector('.confirmation-form');
+                const confirmMsg = clone.querySelector('.message-confirm');
+                confirmForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const formData = new FormData(confirmForm);
+                    const payload = {
+                        event_id: event.id,
+                        registration_id: parseInt(formData.get('reg_id')),
+                        email: formData.get('email')
+                    };
+
+                    try {
+                        const res = await fetch(`${apiBase}/events/${event.id}/confirm`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        const result = await res.json();
+
+                        if (result.status === 'ok') {
+                            confirmMsg.textContent = `Бронь подтверждена!`;
+                            confirmMsg.style.color = 'green';
+                            confirmForm.reset();
+                        } else {
+                            confirmMsg.textContent = `Ошибка: ${result.error.desc}`;
+                            confirmMsg.style.color = 'red';
+                        }
+                    } catch (err) {
+                        confirmMsg.textContent = `Ошибка запроса: ${err.message}`;
+                        confirmMsg.style.color = 'red';
+                    }
+                });
+
+                container.appendChild(clone);
+            });
+        } catch (err) {
+            document.getElementById('events').textContent = 'Не удалось загрузить события: ' + err.message;
+        }
+    }
+
+    loadEvents();
+</script>
+
+</body>
+</html>
